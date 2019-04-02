@@ -23,9 +23,7 @@ import cv2
 from keras.models import load_model
 # Loading multiple instances of dataset
 # Combining Loss/Create new model
-from tqdm import tqdm
-import sys
-import csv
+
 # Dataset directory parameters
 
 
@@ -51,7 +49,7 @@ ckpt_path = WORKSPACE_DIR + '/ckpt_1.h5'
 in_1_size = [24,24,3]
 in_2_size = [48,48,3]
 in_3_size = [96,96,3]
-out = [192,192,3]
+out = [48,48,3]
 n = np.arange(10000,100000,10000)
 # Parameter Class
 class parameters:
@@ -91,7 +89,7 @@ def load_data(path,flag=1,start=0,batch_size=25000):
         	imResize = im.resize((192,192), Image.ANTIALIAS)
         	imResize = np.array(imResize)
         	y3_train.append(imResize)
-        	
+        	print('Img Done',count+1) 
         count+=1
     if flag==0:
     	
@@ -112,8 +110,6 @@ def gen_model(param_object):
 #G = gen_model(param_obj)
 
 
-
-
 class merge_models:   
    
     def __init__(self,epochs,batch_size):
@@ -123,8 +119,8 @@ class merge_models:
             # Generator
         filter_kernal = [[32,128,128,128,256],[32,128,128,128,128,256,512],[32,128,128,128,128,128,128,128,512]]
        
-        self.g_1 = generator(3,filter_kernal[2],in_1_size,'Adam','mse',path = '/home/mdo2/sid_codes/new_codes/gen_1.h5').generator_model()   
-        self.g_2 = generator(2,filter_kernal[1],in_2_size,'Adam','mse',path = '/home/mdo2/sid_codes/new_codes/gen_2.h5').generator_model()
+        #self.g_1 = generator(3,filter_kernal[2],in_1_size,'Adam','mse',path = '/home/mdo2/sid_codes/new_codes/gen_1.h5').generator_model()   
+        #self.g_2 = generator(2,filter_kernal[1],in_2_size,'Adam','mse',path = '/home/mdo2/sid_codes/new_codes/gen_2.h5').generator_model()
         self.g_3 = generator(1,filter_kernal[0],in_3_size,'Adam','mse',path = '/home/mdo2/sid_codes/new_codes/gen_3.h5').generator_model()
 
         # Discriminator
@@ -139,18 +135,18 @@ class merge_models:
         # Images
         lr = Input(shape=in_1_size)
         hr_1 = Input(shape=in_2_size)
-        hr_2 = Input(shape=in_3_size)
+        hr_2 = Input(shape=in_2_size)
         hr_3 = Input(shape=out)
-        fake_hr_image_1 = self.g_1(lr)
-        fake_hr_image_2 = self.g_2(fake_hr_image_1)
-        fake_hr_image_3 = self.g_3(fake_hr_image_2)
+        #fake_hr_image_1 = self.g_1(lr)
+        #fake_hr_image_2 = self.g_2(lr)
+        fake_hr_image_3 = self.g_3(lr)
 
-        self.vgg_1 = vgg(in_2_size).vgg_loss_model()
-        self.vgg_2 = vgg(in_3_size).vgg_loss_model()
-        self.vgg_3 = vgg(out).vgg_loss_model()
+        #self.vgg_1 = vgg(in_2_size).vgg_loss_model()
+        #self.vgg_2 = vgg(in_2_size).vgg_loss_model()
+        self.vgg_3 = vgg(in_2_size).vgg_loss_model()
        
-        fake_hr_feat_1 = self.vgg_1(fake_hr_image_1)
-        fake_hr_feat_2 = self.vgg_2(fake_hr_image_2)
+        #fake_hr_feat_1 = self.vgg_1(fake_hr_image_1)
+        #fake_hr_feat_2 = self.vgg_2(fake_hr_image_2)
         fake_hr_feat_3 = self.vgg_3(fake_hr_image_3)
 
         self.D.trainable = False
@@ -159,8 +155,8 @@ class merge_models:
         validity = self.D(fake_hr_image_3)
         #self.D.load_weights('/media/arjun/119GB/attachments/D_best.h5')
 
-        self.merged_net = Model(inputs=[lr,hr_1,hr_2,hr_3],outputs=[validity,fake_hr_feat_1,fake_hr_feat_2,fake_hr_feat_3])
-        self.merged_net.compile(loss=['binary_crossentropy','mse','mse','mse'],loss_weights=[1e-3,.3,.3,.3],optimizer='Adam')
+        self.merged_net = Model(inputs=[lr,hr_2],outputs=[validity,fake_hr_feat_3])
+        self.merged_net.compile(loss=['binary_crossentropy','mse'],loss_weights=[1e-3,.3],optimizer='Adam')
         self.merged_net.summary()
         #self.merged_net.load_weights('/home/mdo2/sid_codes/newew/my_model.h5')
         print('loaded')
@@ -172,23 +168,10 @@ class merge_models:
       	#self.merged_net.save('my_model.h5')
       	
       	self.merged_net.save('/home/mdo2/sid_codes/new_codes/model.h5')
-      	self.g_1.save('/home/mdo2/sid_codes/new_codes/gen_1.h5')
-      	self.g_2.save('/home/mdo2/sid_codes/new_codes/gen_2.h5')
+      	#self.g_2.save('/home/mdo2/sid_codes/new_codes/gen_2.h5')
+      	#self.g_2.save('/home/mdo2/sid_codes/new_codes/gen_2.h5')
       	self.g_3.save('/home/mdo2/sid_codes/new_codes/gen_3.h5')
-      	self.D.save('/home/mdo2/sid_codes/new_codes/D.h5')
       	print('saved')
-    
-    
-    def write(self,g_loss,d_loss,flag):
-    	with open('train.csv', mode='a') as csv_file:
-    		if flag==True:
-    			fieldnames = ['g_loss','d_loss']
-    			writer = csv.DictWriter(csv_file, fieldnames=fieldnames)
-    			writer.writeheader()
-    		fieldnames = ['g_loss','d_loss']
-    		writer = csv.DictWriter(csv_file, fieldnames=fieldnames)
-    		writer.writerow({'g_loss': g_loss,'d_loss':d_loss})
-		
 	
 
     """
@@ -236,115 +219,154 @@ class merge_models:
 
             #self.g_2.load_weights('/media/arjun/119GB/attachments/g_2_best.h5')
             #self.g_3.load_weights('/media/arjun/119GB/attachments/g_3_best.h5')
-            i=0
-            flag =True
+	
             print("Discriminator loaded")
             for epoch in range(self.epochs):
             	   
             	print("loading data")
             	train_path = dataset_dir
             	img_train_path = glob.glob(train_path)
-            	#i=0
-            	#if i==0:
-            		#avg_loss=0
-            		#i+=1
-            	#avg_loss = avg_loss/int(25000/self.batch_size)
-            	with tqdm(total=int(25000/self.batch_size),file=sys.stdout) as t:
-            		for steps in range(int(25000/self.batch_size)):
-            			
-            			print('Loading Train Batch:',steps+1)
-            			x_train, y_train_1, y_train_2, y_train_3 = load_data(train_path, start=steps*self.batch_size, batch_size=self.batch_size)
-            			print('Training Discriminator')
-            			t.update()
-            			#dISCRIMINATOR
-            			valid = np.ones([self.batch_size,6,6,1])
-            			fake = np.zeros([self.batch_size,6,6,1])
-            			
-            			fake_hr_1 = self.g_1.predict(x_train)
-            			fake_hr_feat_1 = self.vgg_1(fake_hr_1)
-            			fake_hr_2 = self.g_2.predict(fake_hr_1)
-            			fake_hr_feat_2 = self.vgg_2(fake_hr_2)
-            			fake_hr_3 = self.g_3.predict(fake_hr_2)
-            			fake_hr_feat_3 = self.vgg_3(fake_hr_3)
-            			
-            			d_train_loss_fake = self.D.train_on_batch(fake_hr_3, fake)
-            			d_train_loss_real = self.D.train_on_batch(y_train_3, valid)
-            			d_train_loss = 0.5*np.add(d_train_loss_fake,d_train_loss_real)
-            			
-            			#GENERATOR
-            			
-            			print('Training Generator')
-            			valid = np.ones([self.batch_size,6,6,1])
-            			fake = np.zeros([self.batch_size,6,6,1])
-            			real_feat_1 = self.vgg_1.predict(y_train_1)
-            			real_feat_2 = self.vgg_2.predict(y_train_2)
-            			real_feat_3 = self.vgg_3.predict(y_train_3)
-            			g_loss = self.merged_net.train_on_batch([x_train,y_train_1,y_train_2,y_train_3], [valid,real_feat_1,real_feat_2,real_feat_3])
-            			t.set_postfix_str(s='Epoch:'+ str(epoch) + '  Generator_cost ' + str(g_loss) + '  Discriminator_cost ' + str(d_train_loss))
-            			if i>0:
-            				flag =False
-            				
-            			self.write(g_loss,d_train_loss,flag)
-            			i+=1
-            			print('*******************************************************\n')
-            			if self.g == 0:
-            				try:
-            					self.old_loss = np.load('/home/mdo2/sid_codes/newew/g_loss.npy')
-            					print('latest gen')
-            					self.g+=1
-            				except:
-            				
-            					self.old_loss = float('inf')
-            					self.g+=1
-            			if g_loss[0]< self.old_loss:
-            				self.old_loss = g_loss[0]
-            				print('saving best')
-            				np.save	('g_loss',g_loss[0])
-            				self.g+=1
-            				self.save()
+            	i=0
+            	if i==0:
+            		avg_loss=0
+            		i+=1
+            	avg_loss = avg_loss/int(25000/self.batch_size)
+            	
+            	for steps in range(int(25000/self.batch_size)):
+                    # Load data
+                    print(epoch)
+                    print('Loading Train Batch:',steps+1)
+                    x_train, y_train_1, y_train_2, y_train_3 = load_data(train_path, start=steps*self.batch_size, batch_size=self.batch_size)
+                    tbCallBack = keras.callbacks.TensorBoard(log_dir='./Graph', histogram_freq=0, write_graph=True, write_images=True)
 
-				#if (steps+1)%100==0:
-				#    self.save()   
-				#self.merged_net.inputs = [x_train,y_train_1,y_train_2,y_train_3]
-				#self.merged_net.outputs = [valid,fake_hr_feat_1,fake_hr_feat_2,fake_hr_feat_3]
-				#c_loss = K.sqrt(K.mean((fake_hr_feat_1 - real_feat_1)**2))
-				#log_loss = logcosh(fake_hr_feat_1,real_feat_1)
-				#grads = K.gradients([log_loss,c_loss],[fake_hr_feat_1,real_feat_1])[0]
-				#print(grads)
-				#iterate = K.function([(y_train_1)], [c_loss, grads])
-				#print(iterate,'c_loss')
-				#iterate = K.function([tf.convert_to_tensor(y_train_1)], [log_loss, grads])
-				#print(iterate,'log_loss_1')
-				#self.D.fit(y_train_3,valid, epochs=epoch, batch_size=self.batch_size, callbacks=[tbCallBack])
 
-		            
+                    # Discriminator
+
+                    
+                    print('Training Discriminator')
+                    '''
+                    valid1 = np.ones([self.batch_size,1,1,1])
+                    fake1 = np.zeros([self.batch_size,1,1,1])
+                    valid2 = np.ones([self.batch_size,3,3,1])
+                    fake2 = np.zeros([self.batch_size,3,3,1])
+                   
+                    
+                    fake_hr_1 = self.g_1.predict(x_train)
+                    fake_hr_feat_1 = self.vgg_1(fake_hr_1)
+                    
+                    #d_train_loss_real = self.D1.train_on_batch(y_train_1, valid1)
+                    #d_train_loss_fake = self.D1.train_on_batch(fake_hr_1, fake1)
+                    
+                    fake_hr_2 = self.g_2.predict(fake_hr_1)
+                    fake_hr_feat_2 = self.vgg_2(fake_hr_2)
+                    
+                    #d_train_loss_real = self.D2.train_on_batch(y_train_2, valid2)
+                    #d_train_loss_fake = self.D2.train_on_batch(fake_hr_2, fake2)
+                    
+                    
+                   
+                    fake_hr_3 = self.g_3.predict(fake_hr_2)
+                    fake_hr_feat_3 = self.vgg_3(fake_hr_3)
+
+                    d_train_loss_fake = self.D.train_on_batch(fake_hr_3, fake)
+                    d_train_loss_real = self.D.train_on_batch(y_train_3, valid)
+		    
+
+                    
+                    #d_train_loss_real = self.D.train_on_batch(y_train_3, valid)
+                    #d_train_loss_fake = self.D.train_on_batch(fake_hr_3, fake)
+                    #print(d_train_loss_fake,' fake loss ')
+                    #print(d_train_loss_real,' real loss ')
+                    d_train_loss = 0.5*np.add(d_train_loss_fake,d_train_loss_real)
+                    # Generator   
+                    #valid = np.ones([self.batch_size,192,192,3])
+                    '''
+                    print('Training Generator')
+                    valid = np.ones([self.batch_size,1,1,1])
+                    fake = np.zeros([self.batch_size,1,1,1])
+                    #real_feat_1 = self.vgg_1.predict(y_train_1)
+                    #real_feat_2 = self.vgg_2.predict(y_train_1)
+                    real_feat_3 = self.vgg_3.predict(y_train_1)
+                    d_train_loss=0
+                    #cv2.imshow('image',real_feat_3)
+                    
+                    g_loss = self.merged_net.train_on_batch([x_train,y_train_1], [valid,real_feat_3])
+                    
+                    #g_loss=0
+                    #d_train_loss = 0
+                    
+                    print(g_loss,d_train_loss)
+                    avg_loss+=g_loss[0]
+                    #self.low = g_loss
+                    
+                    #print("aaaaaa",K.eval(K.sum(log_loss_1)))
+                    print('*******************************************************\n')
+                    if self.g == 0:
+                    	
+                    	try:
+                    		self.old_loss = np.load('/home/mdo2/sid_codes/newew/g_loss_3.npy')
+                    		print('latest gen')
+                    		self.g+=1
+                    	except:
+                    		self.old_loss = float('inf')
+                    		self.g+=1
+                    if g_loss[0]< self.old_loss:
+                    	self.old_loss = g_loss[0]
+                    	print('saving best')
+                    	np.save	('g_loss_3',g_loss[0])
+                    	self.g+=1
+                    	self.save()
+                    	
+                    #if (steps+1)%100==0:
+                    #    self.save()   
+                    #self.merged_net.inputs = [x_train,y_train_1,y_train_2,y_train_3]
+                    #self.merged_net.outputs = [valid,fake_hr_feat_1,fake_hr_feat_2,fake_hr_feat_3]
+                    #c_loss = K.sqrt(K.mean((fake_hr_feat_1 - real_feat_1)**2))
+                    #log_loss = logcosh(fake_hr_feat_1,real_feat_1)
+                    #grads = K.gradients([log_loss,c_loss],[fake_hr_feat_1,real_feat_1])[0]
+                    #print(grads)
+                    #iterate = K.function([(y_train_1)], [c_loss, grads])
+                    #print(iterate,'c_loss')
+                    #iterate = K.function([tf.convert_to_tensor(y_train_1)], [log_loss, grads])
+                    #print(iterate,'log_loss_1')
+                    #self.D.fit(y_train_3,valid, epochs=epoch, batch_size=self.batch_size, callbacks=[tbCallBack])
+                   
+                    
         except KeyboardInterrupt:
             print('Saving Weights')
             #self.save()           
     def feed_forward(self):
-    	in_1 = [64,64,3]
-    	in_2 = [64,64,3]
-    	in_3 = [64*4,64*4,3]
+    	in_1 = [256,256,3]
+    	in_2 = [512,512,3]
+    	in_3 = [1024,1024,3]
     	out_ = [128,128,3]
-    	img = cv2.resize(cv2.imread('/home/mdo2/sid_codes/datasets_big/qhd_no_pad/train/1.png',1),(64,64))
-    	img = img.reshape(1,64,64,3)
+    	#/home/mdo2/sid_codes/newew/ee2.jpg
+    	#/home/mdo2/sid_codes/datasets_big/qhd_no_pad/train/1.png
+    	img = cv2.resize(cv2.imread('/home/mdo2/sid_codes/datasets_big/qhd_no_pad/train/1.png',1),(512*2,512*2))
+    	img = img.reshape(1,512*2,512*2,3)
     	filter_kernal = [[32,128,128,128,256],[32,128,128,128,128,256,512],[32,128,128,128,128,128,128,128,512]]
-    	g3 = generator(3,filter_kernal[2],in_1,'Adam',path = '/home/mdo2/sid_codes/new_codes/gen_1.h5').generator_model()
-    	#g2 = generator(2,filter_kernal[1],in_2,'Adam',path = '/home/mdo2/sid_codes/new_codes/gen_2.h5').generator_model()
-    	#g1 = generator(1,filter_kernal[0],in_1,'Adam',path = '/home/mdo2/sid_codes/new_codes/gen_3.h5').generator_model()
+    	g3 = generator(3,filter_kernal[2],in_3,'Adam',path = '/home/mdo2/sid_codes/new_codes/gen_1.h5').generator_model()
+    	#g2 = generator(2,filter_kernal[1],in_2,'Adam',path = '/home/mdo2/sid_codes/new_codes/new_save/gen_2.h5').generator_model()
+    	#g1 = generator(1,filter_kernal[0],in_1,'Adam',path = '/home/mdo2/sid_codes/new_codes/new_save/gen_3.h5').generator_model()
     	img = g3.predict(img)
     	#img = g2.predict(img)
     	img = np.array(img).astype('uint8')
-    	img = img.reshape(128,128,3)
+    	img = img.reshape(1024*2,1024*2,3)
     	cv2.imshow('img',img)
     	cv2.waitKey(0)
-    	cv2.imwrite('ee.jpg',img)
+    	cv2.imwrite('ee3.png',img)
+    	im1 = tf.io.decode_image('/home/mdo2/sid_codes/newew/ee3.png')
+    	#im1 = tf.image.convert_image_dtype(im1, tf.float32)
+    	im2 = tf.io.decode_image('/home/mdo2/sid_codes/datasets_big/qhd_no_pad/train/1.png')
+    	#im2 = tf.image.convert_image_dtype(im2, tf.float32)
+    	psnr1 = tf.image.psnr(im2, im2, max_val=1.0)
+    	print(psnr1)
 	#img = g2.predict(img)
 	#img = g3.predict(img)
 	
 	
 
-merge_models(100,125).train()
+merge_models(100,500).feed_forward()
 
 
 def dice_coef(y_true, y_pred, smooth, thresh):
